@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Type } from '@google/genai';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
@@ -10,9 +9,6 @@ import {
   AlertCircle, CheckCircle2, Info, X, Image as ImageIcon,
   Utensils, Activity, Flame, Droplets, Wheat, Loader2
 } from 'lucide-react';
-
-const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
-
 type Profile = {
   name: string;
   age: number;
