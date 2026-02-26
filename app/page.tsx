@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Modality } from '@google/genai';
 import ReactMarkdown from 'react-markdown';
 import { motion, AnimatePresence } from 'motion/react';
 import Link from 'next/link';
@@ -34,9 +33,6 @@ declare global {
     };
   }
 }
-
-// Initialize Gemini API
-const ai = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
 
 type Message = {
   id: string;
@@ -356,16 +352,24 @@ SCHEMA (пример):
         parts: currentMessageParts
       });
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: historyContents,
-        config: {
-          systemInstruction: getSystemPrompt(profile),
-          temperature: 0.7,
-        }
-      });
+      const r = await fetch("/api/gemini", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    model: "gemini-2.5-flash",
+    contents: historyContents,
+    systemInstruction: getSystemPrompt(profile),
+    temperature: 0.7,
+  }),
+});
 
-      let responseText = response.text || '';
+const data = await r.json();
+if (!r.ok) {
+  throw new Error(data?.error || "Gemini request failed");
+}
+
+let responseText = String(data.text || "");
+
       let isShoppingList = false;
       let needsSubscription = false;
 
@@ -481,12 +485,8 @@ SCHEMA (пример):
 
       const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
       if (downloadLink) {
-        const response = await fetch(downloadLink, {
-          method: 'GET',
-          headers: {
-            'x-goog-api-key': process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '',
-          },
-        });
+        const response = await fetch(downloadLink);
+          
         const blob = await response.blob();
         const videoUrl = URL.createObjectURL(blob);
         
