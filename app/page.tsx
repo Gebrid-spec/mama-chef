@@ -459,55 +459,8 @@ let responseText = String(data.text || "");
         await window.aistudio.openSelectKey();
       }
       
-      const aiForVideo = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || '' });
-      
       const match = selectedImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
       if (!match) throw new Error("Invalid image");
-
-      let operation = await aiForVideo.models.generateVideos({
-        model: 'veo-3.1-fast-generate-preview',
-        prompt: prompt,
-        image: {
-          imageBytes: match[2],
-          mimeType: match[1],
-        },
-        config: {
-          numberOfVideos: 1,
-          resolution: '720p',
-          aspectRatio: '16:9'
-        }
-      });
-
-      while (!operation.done) {
-        await new Promise(resolve => setTimeout(resolve, 10000));
-        operation = await aiForVideo.operations.getVideosOperation({operation: operation});
-      }
-
-      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-      if (downloadLink) {
-        const response = await fetch(downloadLink);
-          
-        const blob = await response.blob();
-        const videoUrl = URL.createObjectURL(blob);
-        
-        setMessages(prev => [...prev, {
-          id: Date.now().toString(),
-          role: 'assistant',
-          content: 'Вот ваше видео!',
-          video: videoUrl
-        }]);
-      }
-    } catch (err) {
-      console.error(err);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'assistant',
-        content: 'Произошла ошибка при генерации видео.'
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handleEditImage = async () => {
     if (!selectedImage) return;
@@ -582,87 +535,6 @@ let responseText = String(data.text || "");
       return;
     }
     
-    setIsLiveActive(true);
-    try {
-      const aiLive = new GoogleGenAI({ apiKey: process.env.NEXT_PUBLIC_GEMINI_API_KEY });
-      const sessionPromise = aiLive.live.connect({
-        model: "gemini-2.5-flash-native-audio-preview-09-2025",
-        callbacks: {
-          onopen: async () => {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const audioContext = new AudioContext({ sampleRate: 16000 });
-            audioContextRef.current = audioContext;
-            const source = audioContext.createMediaStreamSource(stream);
-            const processor = audioContext.createScriptProcessor(4096, 1, 1);
-            
-            processor.onaudioprocess = (e) => {
-              const inputData = e.inputBuffer.getChannelData(0);
-              const pcm16 = new Int16Array(inputData.length);
-              for (let i = 0; i < inputData.length; i++) {
-                pcm16[i] = Math.max(-32768, Math.min(32767, inputData[i] * 32768));
-              }
-              const buffer = new ArrayBuffer(pcm16.length * 2);
-              const view = new DataView(buffer);
-              for (let i = 0; i < pcm16.length; i++) {
-                view.setInt16(i * 2, pcm16[i], true);
-              }
-              const base64 = btoa(String.fromCharCode.apply(null, new Uint8Array(buffer) as any));
-              
-              sessionPromise.then(session => {
-                session.sendRealtimeInput({
-                  media: { data: base64, mimeType: 'audio/pcm;rate=16000' }
-                });
-              });
-            };
-            
-            source.connect(processor);
-            processor.connect(audioContext.destination);
-          },
-          onmessage: (message: any) => {
-            const base64Audio = message.serverContent?.modelTurn?.parts[0]?.inlineData?.data;
-            if (base64Audio) {
-              const binaryString = atob(base64Audio);
-              const bytes = new Uint8Array(binaryString.length);
-              for (let i = 0; i < binaryString.length; i++) {
-                bytes[i] = binaryString.charCodeAt(i);
-              }
-              const pcm16 = new Int16Array(bytes.buffer);
-              const float32 = new Float32Array(pcm16.length);
-              for (let i = 0; i < pcm16.length; i++) {
-                float32[i] = pcm16[i] / 32768;
-              }
-              
-              if (audioContextRef.current) {
-                const buffer = audioContextRef.current.createBuffer(1, float32.length, 24000);
-                buffer.getChannelData(0).set(float32);
-                const source = audioContextRef.current.createBufferSource();
-                source.buffer = buffer;
-                source.connect(audioContextRef.current.destination);
-                source.start();
-              }
-            }
-          },
-          onclose: () => setIsLiveActive(false),
-          onerror: (err: any) => {
-            console.error(err);
-            setIsLiveActive(false);
-          }
-        },
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
-          },
-          systemInstruction: "You are Mama-Chef AI, a helpful assistant for baby food. Speak warmly and kindly in Russian.",
-        }
-      });
-      liveSessionRef.current = await sessionPromise;
-    } catch (err) {
-      console.error(err);
-      setIsLiveActive(false);
-    }
-  };
-
   return (
     <>
       <AnimatePresence>
